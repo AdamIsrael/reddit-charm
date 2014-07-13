@@ -1,0 +1,24 @@
+name: reddit
+summary: This is the primary codebase that powers http://reddit.com.
+maintainer: Adam Israel <adam@adamisrael.com>
+description: |
+    This will install and setup Reddit optimized to run in the cloud. By default it will 
+     place Ngnix and php-fpm configured to scale horizontally with Nginx's reverse proxy.
+categories:
+  - applications
+subordinate: false
+provides:
+  website:
+    interface: http
+requires:
+  db:
+    interface: postgresql
+  cache:
+    interface: memcached
+  db:
+    interface: cassandra
+  ampq:
+    interface: rabbitmq-server
+peers:
+  loadbalancer:
+    interface: reversenginx
