@@ -1,9 +1,1 @@
-#!/bin/bash
-# Here put anything that is needed to start the service.
-# Note that currently this is run directly after install
-# i.e. 'service apache2 start'
-
-
-# engine=`cat .web-engine`
-# service php5-fpm restart
-# service $engine restart
+hooks.py

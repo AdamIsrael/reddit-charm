@@ -1,2 +1,1 @@
-#!/bin/bash
-# config-changed occurs everytime a new configuration value is updated (juju set)
+hooks.py

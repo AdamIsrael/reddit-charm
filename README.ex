@@ -6,7 +6,7 @@ This is the primary codebase that powers http://reddit.com.
 
 This charm is available in the Juju Charm Store, to deploy you'll need at a minimum: a cloud environment, a working Juju installation, and a successful bootstrap. Please refer to the [Juju Getting Started](https://juju.ubuntu.com/docs/getting-started.html) documentation before continuing.
 
-Once bootstrapped, deploy the MySQL charm then this WordPress charm:
+Once bootstrapped, deploy the dependency charms, and then the reddit charm:
 
     juju deploy postgresql
     juju deploy cassandra
