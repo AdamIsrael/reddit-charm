@@ -1,6 +1,6 @@
 name: reddit
 summary: <Fill in summary here>
-maintainer: vagrant <vagrant@vagrant-ubuntu-trusty-64>
+maintainer: Adam Israel <adam.israel@gmail.com>
 description: |
   <Multi-line description here>
 categories:
