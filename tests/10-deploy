@@ -5,8 +5,8 @@ import requests
 
 d = amulet.Deployment()
 
-d.add('mycharm')
-d.expose('mycharm')
+d.add('reddit')
+d.expose('reddit')
 
 try:
     d.setup(timeout=900)
@@ -16,7 +16,7 @@ except amulet.helpers.TimeoutError:
 except:
     raise
 
-unit = d.sentry.unit['mycharm/0']
+unit = d.sentry.unit['reddit/0']
 
 # test we can access over http
 page = requests.get('http://{}'.format(unit.info['public-address']))
