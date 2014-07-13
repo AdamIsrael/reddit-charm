@@ -1,24 +1,17 @@
-name: reddit
-summary: This is the primary codebase that powers http://reddit.com.
-maintainer: Adam Israel <adam@adamisrael.com>
+name: mycharm
+summary: <Fill in summary here>
+maintainer: vagrant <vagrant@vagrant-ubuntu-trusty-64>
 description: |
-    This will install and setup Reddit optimized to run in the cloud. By default it will 
-     place Ngnix and php-fpm configured to scale horizontally with Nginx's reverse proxy.
+  <Multi-line description here>
 categories:
-  - applications
+  - misc
 subordinate: false
 provides:
-  website:
-    interface: http
+  provides-relation:
+    interface: interface-name
 requires:
-  db:
-    interface: postgresql
-  cache:
-    interface: memcached
-  db:
-    interface: cassandra
-  ampq:
-    interface: rabbitmq-server
+  requires-relation:
+    interface: interface-name
 peers:
-  loadbalancer:
-    interface: reversenginx
+  peer-relation:
+    interface: interface-name
