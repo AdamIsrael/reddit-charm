@@ -13,12 +13,12 @@ from charmhelpers.core import (
 hooks = hookenv.Hooks()
 log = hookenv.log
 
-SERVICE = 'mycharm'
+SERVICE = 'reddit'
 
 
 @hooks.hook('install')
 def install():
-    log('Installing mycharm')
+    log('Installing reddit')
 
 
 @hooks.hook('config-changed')
@@ -36,7 +36,7 @@ def config_changed():
 
 @hooks.hook('upgrade-charm')
 def upgrade_charm():
-    log('Upgrading mycharm')
+    log('Upgrading reddit')
 
 
 @hooks.hook('start')
