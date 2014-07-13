@@ -1,1 +1,4 @@
 *.pyc
+.vagrant/
+Vagrantfile
+vagrant-test-runner.sh
