@@ -1,17 +1,21 @@
 name: reddit
-summary: <Fill in summary here>
+summary: The code that powers reddit.com
 maintainer: Adam Israel <adam.israel@gmail.com>
 description: |
-  <Multi-line description here>
+  Reddit is an entertainment, social networking, and news site where users can share content via text posts and links.
 categories:
-  - misc
+  - applications
 subordinate: false
-provides:
-  provides-relation:
-    interface: interface-name
 requires:
-  requires-relation:
-    interface: interface-name
-peers:
-  peer-relation:
-    interface: interface-name
+  db:
+    interface: pgsql
+  database:
+    interface: cassandra
+  cache: 
+    interface: memcache
+  ampq:
+    interface: rabbitmq
+    
+provides:
+  website:
+    interface: http
