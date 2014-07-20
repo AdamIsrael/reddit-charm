@@ -21,6 +21,11 @@ from charmhelpers.fetch import (
 
 from charmhelpers.core.hookenv import (
     config
+    , open_port
+    , relation_set
+    , relation_get
+    , relation_ids
+    , unit_get
 )
 
 hooks = hookenv.Hooks()
@@ -68,18 +73,18 @@ PACKAGES = [
     , 'make'
     , 'optipng'
     , 'jpegoptim'
-    , 'nodejs'
-    , 'node-less'
-    , 'node-uglify'
-    , 'memcached'
-    , 'postgresql'
+    #, 'nodejs'
+    #, 'node-less'
+    #, 'node-uglify'
+    #, 'memcached'
+    #, 'postgresql'
     , 'postgresql-client'
-    , 'rabbitmq-server'
+    #, 'rabbitmq-server'
     #, 'cassandra'
-    , 'haproxy'
-    , 'nginx'
-    , 'stunnel'
-    , 'gunicorn'
+    #, 'haproxy'
+    #, 'nginx'
+    #, 'stunnel'
+    #, 'gunicorn'
     #, 'sutro'
     , 'python-pip'
 ]
@@ -87,9 +92,17 @@ PIP_MODULES = [
     'pycassa'
     , 'stripe'
     , 'tinycss2'
-    , 'snudown'
+    #   Not sure this is available via pip: see https://github.com/reddit/snudown; clone it?
+    #, 'snudown'
     , 'l2cs'
 ]
+
+@hooks.hook('pgsql-db-relation-joined')
+def pgsql_db_joined():
+    log("pgsql_db_joined")
+    print "pgsql!"
+
+
 @hooks.hook('install')
 def install():
     log('Installing reddit')
