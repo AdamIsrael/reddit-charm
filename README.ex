@@ -14,7 +14,7 @@ In order to deploy this charm, you will need a working juju installation. Once b
     juju deploy memcached
     juju deploy reddit
     juju add-relation reddit:database cassandra:database
-    juju add-relation reddit postgresql
+    juju add-relation reddit:db postgresql:db
     juju add-relation reddit rabbitmq-server
     juju add-relation reddit memcached    
     juju deploy gunicorn
