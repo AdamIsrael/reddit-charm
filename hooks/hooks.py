@@ -97,11 +97,17 @@ PIP_MODULES = [
     , 'l2cs'
 ]
 
-@hooks.hook('pgsql-db-relation-joined')
+@hooks.hook('db-relation-joined')
 def pgsql_db_joined():
     log("pgsql_db_joined")
+    
+    # When the relationship is joined, create the reddit database
     print "pgsql!"
 
+@hooks.hook('db-relation-changed')
+def pgsql_db_changed():
+    log("pgsql_db_changed")
+    print "pgsql!!"
 
 @hooks.hook('install')
 def install():
