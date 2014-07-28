@@ -97,17 +97,46 @@ PIP_MODULES = [
     , 'l2cs'
 ]
 
+def is_pgsql_db_installed():
+    # Check the system catalog for function(s) created during installation
+    #SQL="SELECT COUNT(1) FROM pg_catalog.pg_database WHERE datname = 'reddit';"
+    #IS_DATABASE_CREATED=$(sudo -u postgres psql -t -c "$SQL")
+    
+    return False
+
+def install_pgsql_db():
+    # Install the base database
+    
+    # Install reddit's pgsql functions
+    # sudo -u postgres psql reddit < $REDDIT_HOME/src/reddit/sql/functions.sql
+    return
+        
 @hooks.hook('db-relation-joined')
 def pgsql_db_joined():
     log("pgsql_db_joined")
-    
-    # When the relationship is joined, create the reddit database
-    print "pgsql!"
+    hookenv.relation_set(relation_settings={"database": "reddit"})
 
 @hooks.hook('db-relation-changed')
 def pgsql_db_changed():
     log("pgsql_db_changed")
-    print "pgsql!!"
+    
+    db_user = hookenv.relation_get('user')
+    db_pass = hookenv.relation_get('password')
+    db_name = hookenv.relation_get('database')
+    db_host = hookenv.relation_get('private-address')
+    if db_name is None:
+        log("No database info sent yet.")
+        return 0
+    log("Database info received -- host: %s; name: %s; user: %s; password: %s" % (db_host, db_name, db_user, db_pass))
+    
+    
+    if not is_pgsql_db_installed():
+        install_pgsql_db()
+
+    config = hookenv.config()
+    if config['development-mode']:
+        # Load the pre-populated data
+        None
 
 @hooks.hook('install')
 def install():
