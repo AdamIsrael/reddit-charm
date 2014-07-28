@@ -1,14 +1,21 @@
+# Another nice option here would be to include the REVNO and REPO as a configuration option as I see you are using git based deployment. This would help alleviate the added stress on the charm author when the charm appears 'broken' due to a broken release being in -HEAD, or someone that wants to fork the reddit service and run their own patches.
+
+
 options:
-  string-option:
+  revno:
     type: string
-    default: "Default Value"
-    description: "A short description of the configuration option"
-  boolean-option:
+    default: ""
+    description: "The revision number of the repository to pull."
+  repo:
+    type: string
+    default: "https://github.com/reddit/reddit.git"
+    description: "The git repository to pull the reddit codebase from."
+  development-mode:
     type: boolean
     default: False
-    description: "A short description of the configuration option"
-  int-option:
-    type: int
-    default: 9001
-    description: "A short description of the configuration option"
+    description: "Populates the reddit database with test data."
+  # int-option:
+  #   type: int
+  #   default: 9001
+  #   description: "A short description of the configuration option"
 
