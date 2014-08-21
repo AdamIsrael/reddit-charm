@@ -125,34 +125,26 @@ def populate_test_data():
     # cd $REDDIT_HOME/src/reddit/r2
     # reddit-run r2/models/populatedb.py -c 'populate()'
     cmd = ['reddit-run', '%s/src/reddit/r2/models/populatedb.py' % REDDIT_HOME, '-c', '\'populate()\'']
-    print cmd
     check = subprocess.check_output(cmd)
-    print check
+    # TODO: sanity check the return output
     return
     
 def is_pgsql_db_installed():
-    
-    # Check the system catalog for function(s) created during installation
+    # Check the system catalog for table(s) created during installation
     sql = "select count(*) from information_schema.tables where table_schema = 'public';"
-    #IS_DATABASE_CREATED=$(sudo -u postgres psql -t -c "$SQL")
     cmd = ['psql', '-t', '-c', sql]
-    print cmd
     check = subprocess.check_output(cmd)
-    
-    log('db check = %i' % int(check))
     return int(check)
 
-def install_pgsql_db():
+def install_pgsql_functions():
     # Install the base database
-    log('installing reddit database')
+    log('installing reddit functions')
     # Install reddit's pgsql functions
     # NOTE: These are create or replace, so it should be run every time a git pull happens
-    
     cmd = ['psql', '-f', '%s//src/reddit/sql/functions.sql' % REDDIT_HOME]
-    print cmd
     check = subprocess.check_output(cmd)
     
-    # TODO: Add some kind of output check?
+    # TODO: sanity check the return output
     return True
         
 @hooks.hook('db-relation-joined')
@@ -168,15 +160,16 @@ def pgsql_db_changed():
 def pgsql_db_changed():
     log("pgsql_db_changed")
     
+    if hookenv.relation_get('database') is None:
+        log("No database info sent yet.")
+        return 0
+
     db_user = hookenv.relation_get('user')
     db_pass = hookenv.relation_get('password')
     db_name = hookenv.relation_get('database')
     db_host = hookenv.relation_get('private-address')
     db_port = hookenv.relation_get('port')
-    
-    if db_name is None:
-        log("No database info sent yet.")
-        return 0
+
     log("Database info received -- host: %s; name: %s; user: %s; password: %s" % (db_host, db_name, db_user, db_pass))
 
     # Following the lead of pgbouncer and using environment variables, but security.
@@ -187,21 +180,16 @@ def pgsql_db_changed():
     os.environ['PGPASSWORD'] = db_pass
     
     if not is_pgsql_db_installed():
-        log('calling install_pgsql_db()')
-        if install_pgsql_db():
-            log('reddit database installed')
-        else:
-            log('failed to install pgsql database')
-    else:
-        log('reddit pgsql database is already installed')
+        if install_pgsql_functions():
+            log('reddit database functions installed')
         
-    config = hookenv.config()
-    if config['development-mode']:
-        # Load the pre-populated data
-        None
+    # config = hookenv.config()
+    # if config['development-mode']:
+    #     # Load the pre-populated data
+    #     log('Populating test data')
+    #     populate_test_data()
+    #     None
     
-    log('Populating test data')
-    populate_test_data()
     
 @hooks.hook('install')
 def install():
