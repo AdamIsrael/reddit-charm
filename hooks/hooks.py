@@ -97,24 +97,72 @@ PIP_MODULES = [
     , 'l2cs'
 ]
 
-def is_pgsql_db_installed():
-    # Check the system catalog for function(s) created during installation
-    #SQL="SELECT COUNT(1) FROM pg_catalog.pg_database WHERE datname = 'reddit';"
-    #IS_DATABASE_CREATED=$(sudo -u postgres psql -t -c "$SQL")
+
+
+def create_helper_scripts():
+
+    f = open('/usr/local/bin/reddit-run', 'w')
+    f.write(
+    """
+    #!/bin/bash
+    exec paster --plugin=r2 run %s/src/reddit/r2/run.ini "\$@"
+    """ % REDDIT_HOME)
+    f.close()
+    os.chmod('/usr/local/bin/reddit-run', 755)
     
-    return False
+    f = open('/usr/local/bin/reddit-shell', 'w')
+    f.write(
+    """
+    #!/bin/bash
+    exec paster --plugin=r2 shell %s/src/reddit/r2/run.ini
+    """ % REDDIT_HOME)
+    f.close()
+    os.chmod('/usr/local/bin/reddit-shell', 755)
+    
+    return
+    
+def populate_test_data():
+    # cd $REDDIT_HOME/src/reddit/r2
+    # reddit-run r2/models/populatedb.py -c 'populate()'
+    cmd = ['reddit-run', '%s/src/reddit/r2/models/populatedb.py' % REDDIT_HOME, '-c', '\'populate()\'']
+    print cmd
+    check = subprocess.check_output(cmd)
+    print check
+    return
+    
+def is_pgsql_db_installed():
+    
+    # Check the system catalog for function(s) created during installation
+    sql = "select count(*) from information_schema.tables where table_schema = 'public';"
+    #IS_DATABASE_CREATED=$(sudo -u postgres psql -t -c "$SQL")
+    cmd = ['psql', '-t', '-c', sql]
+    print cmd
+    check = subprocess.check_output(cmd)
+    
+    log('db check = %i' % int(check))
+    return int(check)
 
 def install_pgsql_db():
     # Install the base database
-    
+    log('installing reddit database')
     # Install reddit's pgsql functions
-    # sudo -u postgres psql reddit < $REDDIT_HOME/src/reddit/sql/functions.sql
-    return
+    # NOTE: These are create or replace, so it should be run every time a git pull happens
+    
+    cmd = ['psql', '-f', '%s//src/reddit/sql/functions.sql' % REDDIT_HOME]
+    print cmd
+    check = subprocess.check_output(cmd)
+    
+    # TODO: Add some kind of output check?
+    return True
         
 @hooks.hook('db-relation-joined')
 def pgsql_db_joined():
     log("pgsql_db_joined")
     hookenv.relation_set(relation_settings={"database": "reddit"})
+
+@hooks.hook('db-relation-broken')
+def pgsql_db_changed():
+    log("pgsql_db_broken")
 
 @hooks.hook('db-relation-changed')
 def pgsql_db_changed():
@@ -124,20 +172,37 @@ def pgsql_db_changed():
     db_pass = hookenv.relation_get('password')
     db_name = hookenv.relation_get('database')
     db_host = hookenv.relation_get('private-address')
+    db_port = hookenv.relation_get('port')
+    
     if db_name is None:
         log("No database info sent yet.")
         return 0
     log("Database info received -- host: %s; name: %s; user: %s; password: %s" % (db_host, db_name, db_user, db_pass))
-    
+
+    # Following the lead of pgbouncer and using environment variables, but security.
+    os.environ['PGHOST'] = db_host
+    os.environ['PGPORT'] = db_port
+    os.environ['PGDATABASE'] = db_name
+    os.environ['PGUSER'] = db_user
+    os.environ['PGPASSWORD'] = db_pass
     
     if not is_pgsql_db_installed():
-        install_pgsql_db()
-
+        log('calling install_pgsql_db()')
+        if install_pgsql_db():
+            log('reddit database installed')
+        else:
+            log('failed to install pgsql database')
+    else:
+        log('reddit pgsql database is already installed')
+        
     config = hookenv.config()
     if config['development-mode']:
         # Load the pre-populated data
         None
-
+    
+    log('Populating test data')
+    populate_test_data()
+    
 @hooks.hook('install')
 def install():
     log('Installing reddit')
@@ -157,6 +222,9 @@ def install():
     print cmd
     subprocess.call(cmd)
     
+    log('Creating helper scripts')
+    create_helper_scripts()
+    
     log('Configuring Cassandra')
     
     log('Configuring PostgreSQL')
@@ -165,6 +233,13 @@ def install():
     
     log('Installing Reddit')
     
+    # TODO: This needs to be run under Precise
+    # BLOCKED: bug #1316174
+    #install_reddit_repo('reddit/r2')
+    #install_reddit_repo('i18n')
+    #install_reddit_repo('about')
+    #install_reddit_repo('liveupdate')
+    #install_reddit_repo('meatspace')
     
     return True
 
@@ -199,18 +274,15 @@ def stop():
     None
 
 
-# function clone_reddit_repo {
-#     local destination=$REDDIT_HOME/src/${1}
-#     local repository_url=https://github.com/${2}.git
-#
-#     if [ ! -d $destination ]; then
-#         sudo -u $REDDIT_USER git clone $repository_url $destination
-#     fi
-#
-#     if [ -d $destination/upstart ]; then
-#         cp $destination/upstart/* /etc/init/
-#     fi
-# }
+def install_reddit_repo(repo):
+    subprocess.call(
+    """
+    cd %s/src/%s
+    sudo -u %s python setup.py build
+    python setup.py develop --no-deps
+    """ % (REDDIT_HOME, repo, REDDIT_USER), shell=True)
+    return
+
 # clone_reddit_repo reddit reddit/reddit
 def clone_reddit_repo (target, repo):
     repository_url = 'https://github.com/%s.git' % repo
