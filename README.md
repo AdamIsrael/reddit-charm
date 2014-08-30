@@ -27,9 +27,21 @@ After a successful deployment, you can get the reddit unit IP address with:
 
 and then browse to http://ip-address to configure the service. The source files are installed to /home/reddit/src/reddit, in the unit machine's file system.
 
+Admin interface
+How to add a reddit
+L
+
 # Configuration
 
 The configuration options will be listed on the charm store, however If you're making assumptions or opinionated decisions in the charm (like setting a default administrator password), you should detail that here so the user knows how to change it immediately, etc.
+
+    juju set reddit [option]=[value]
+
+
+
+# Caveats
+
+# Scaling
 
 # Contact Information
 
