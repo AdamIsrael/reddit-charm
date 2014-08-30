@@ -6,6 +6,7 @@ import pwd
 import sys
 import shlex, subprocess
 import shutil, glob
+from ConfigParser import RawConfigParser
 
 sys.path.insert(0, os.path.join(os.environ['CHARM_DIR'], 'lib'))
 
@@ -37,8 +38,12 @@ SERVICE = 'reddit'
 REDDIT_USER = 'reddit'
 REDDIT_GROUP = 'reddit'
 REDDIT_HOME = '/home/reddit'
+REDDIT_INSTALL_PATH = '%s/src/reddit/r2' % REDDIT_HOME
+
 REDDIT_DOMAIN = unit_get('public-address')
 CONSUMER_CONFIG_ROOT = '%s/consumer-count.d' % REDDIT_HOME
+CASSANDRA_KEYSPACE = 'reddit'
+CASSANDRA_COLUMN = 'permacache'
 
 # For simplification of string formatting
 CONFIG = { 
@@ -117,19 +122,19 @@ def create_helper_scripts():
 
     f = open('/usr/local/bin/reddit-run', 'w')
     f.write(
-    """
-    #!/bin/bash
-    exec paster --plugin=r2 run %s/src/reddit/r2/run.ini "\$@"
-    """ % REDDIT_HOME)
+"""
+#!/bin/bash
+exec paster --plugin=r2 run %s/src/reddit/r2/run.ini "\$@"
+""" % REDDIT_HOME)
     f.close()
     os.chmod('/usr/local/bin/reddit-run', 0755)
     
     f = open('/usr/local/bin/reddit-shell', 'w')
     f.write(
-    """
-    #!/bin/bash
-    exec paster --plugin=r2 shell %s/src/reddit/r2/run.ini
-    """ % REDDIT_HOME)
+"""
+#!/bin/bash
+exec paster --plugin=r2 shell %s/src/reddit/r2/run.ini
+""" % REDDIT_HOME)
     f.close()
     os.chmod('/usr/local/bin/reddit-shell', 0755)
     
@@ -209,44 +214,97 @@ def cassandra_joined():
     #hookenv.relation_set(relation_settings={"database": "reddit"})
     return
 
+@hooks.hook('database-relation-broken')
+def cassandra_broken():
+    return
+    
 @hooks.hook('database-relation-changed')
 def cassandra_changed():
     import pycassa
-    #from pycassa.system_manager import *
-    #from pycassa.types import *
 
     # relation-get:
     # port: "9160"
     # private-address: 10.0.3.147
-    casshost = '%s:%d' % (hookenv.get_relation('private-address'), hookenv.get_relation('port'))
+    host = hookenv.relation_get('private-address')
+    port = hookenv.relation_get('port')
+    if host and port:
+        casshost = '%s:%d' % (host, int(port))
+        log("Connecting to Cassandra host: %s" % casshost)
 
-    # Create 'reddit' keyspace
-    sys = pycassa.system_manager.SystemManager(casshost)
-    
+        sys = pycassa.system_manager.SystemManager(casshost)
 
-    # if ! echo | cassandra-cli -h localhost -k reddit &> /dev/null; then
-    # echo "create keyspace reddit;" | cassandra-cli -h localhost -B
-    # fi
-    try:
-        sys.create_keyspace('reddit', pycassa.system_manager.SIMPLE_STRATEGY, {'replication_factor': '1'})
-        log("Created 'reddit' keyspace")
-    except pycassa.cassandra.ttypes.InvalidRequestException:
-        log("'reddit' keyspace already exists.")
-        pass
-    # throws pycassa.cassandra.ttypes.InvalidRequestException on duplicate
+        # Create 'reddit' keyspace
+        keyspaces = sys.list_keyspaces()
+        if CASSANDRA_KEYSPACE not in keyspaces:
+            sys.create_keyspace(CASSANDRA_KEYSPACE, pycassa.system_manager.SIMPLE_STRATEGY, {'replication_factor': '1'})
+            log("Created '%s' keyspace" % CASSANDRA_KEYSPACE)
+        else:
+            log("'%s' keyspace already exists." % CASSANDRA_KEYSPACE)
+        
+        column_families = sys.get_keyspace_column_families(CASSANDRA_KEYSPACE).keys()
+        if CASSANDRA_COLUMN not in column_families:
+            sys.create_column_family(CASSANDRA_KEYSPACE, CASSANDRA_COLUMN, column_type='Standard', default_validation_class=pycassa.BYTES_TYPE)
+            log("Created '%s' column" % CASSANDRA_COLUMN)
+        else:
+            log("'%s' column already exists" % CASSANDRA_COLUMN)
     
-    # cat <<CASS | cassandra-cli -B -h localhost -k reddit || true
-    # create column family permacache with column_type = 'Standard' and
-    # comparator = 'BytesType';
-    # CASS
-    try:
-        sys.create_column_family('reddit', 'permacache', column_type='Standard', default_validation_class=pycassa.types.BYTES_TYPE)
-        log("Created 'reddit' column")
-    except pycassa.cassandra.ttypes.InvalidRequestException:
-        log("'reddit' column already exists")
-        pass
-    
+        # Write out the cassandra part of the ini and rebuild
+        ini = RawConfigParser()
+        ini.optionxform = str  # ensure keys are case-sensitive as expected
+        ini.read('%s/juju.update' % REDDIT_INSTALL_PATH)
+        ini.set('DEFAULT', 'cassandra_seeds', casshost)
+        
+        with open('%s/juju.update' % REDDIT_INSTALL_PATH, 'w') as cf:
+            ini.write(cf)
+            
+        make_ini()
+
+    else:
+        log("cassandra not ready")
+        
     return
+    
+@hooks.hook('amqp-relation-joined')
+def rabbitmq_server_joined():
+    pass
+
+@hooks.hook('amqp-relation-changed')
+def rabbitmq_server_changed():
+    # $ relation-get
+    # hostname: 10.0.3.136
+    # private-address: 10.0.3.136
+
+    # 
+    hookenv.relation_set('username', 'reddit')
+    hookenv.relation_set('vhost', '/')
+    
+    host = hookenv.relation_get('private-address')
+    password = hookenv.relation_get('password')
+    if host is None or password is None:
+        log('rabbitmq not ready')
+    else:
+        log('rabbitmq is ready!')
+
+    #port = hookenv.relation_get('port')
+    
+    #import client_0_8 as amqp
+
+    #conn = amqp.Connection(host='', userid)
+    # if ! rabbitmqctl list_vhosts | egrep "^/$"
+    # then
+    # rabbitmqctl add_vhost /
+    # fi
+    # if ! rabbitmqctl list_users | egrep "^reddit"
+    # then
+    # rabbitmqctl add_user reddit reddit
+    # fi
+    # rabbitmqctl set_permissions -p / reddit ".*" ".*" ".*"
+    
+    pass
+
+@hooks.hook('ampq-relation-broken')
+def rabbitmq_server_broken():
+    pass
     
 @hooks.hook('install')
 def install():
@@ -306,7 +364,6 @@ Pin-Priority: 600""")
     sudo -u %s make
     """ % (REDDIT_HOME, REDDIT_USER), shell=True)
 
-    install_path = '%s/src/reddit/r2' % REDDIT_HOME
     
     log("Building reddit")
     subprocess.call("""
@@ -314,51 +371,41 @@ Pin-Priority: 600""")
     sudo -u %s make
     """ % (REDDIT_HOME, REDDIT_USER), shell=True)
 
-    # TODO: Move this to config-change?
-    # TODO: Think about scalablity of the reddit app
-    # TODO: Should I add reddit's ini options to the charm config?
-    # TODO: Figure out the process for dealing with changes to the ini set via config -- i.e., does 'make ini' need to be re-run?
-    # Default the domain to the local server, until the config option has been changed.
     log("Creating default ini")
-    f = open('%s/development.update' % install_path, 'w')
-    f.write(
-    """
-# after editing this file, run "make ini" to
-# generate a new development.ini
-[DEFAULT]
-debug = true
-disable_ads = true
-disable_captcha = true
-disable_ratelimit = true
-disable_require_admin_otp = true
-page_cache_time = 0
-domain = %s
-plugins = about, liveupdate, meatspace
-media_provider = filesystem
-media_fs_root = /srv/www/media
-media_fs_base_url_http = http://%s/media/
-media_fs_base_url_https = https://%s/media/
-[server:main]
-port = 8001
-    """ % (REDDIT_DOMAIN, REDDIT_DOMAIN, REDDIT_DOMAIN))
-    f.close()
-    #uid = pwd.getpwnam(REDDIT_USER).pw_uid
-    #gid = pwd.getpwnam(REDDIT_USER).pw_gid
-    #os.chown('%s/development.update' % install_path, uid, gid)
+
+    ini = RawConfigParser()
+    ini.optionxform = str  # ensure keys are case-sensitive as expected
+    ini.read('%s/juju.update' % REDDIT_INSTALL_PATH)
     
-    log("Building reddit ini")
-    subprocess.call("""
-    cd %s
-    sudo -u %s make ini
-    """ % (install_path, REDDIT_USER), shell=True)
+    defaults = {
+        'debug': 'true'
+        ,'disable_ads': 'true'
+        ,'disable_captcha': 'true'
+        ,'disable_ratelimit': 'true'
+        ,'disable_require_admin_otp': 'true'
+        ,'page_cache_time': '0'
+        ,'domain': '%s' % REDDIT_DOMAIN
+        ,'plugins': 'about, liveupdate, meatspace'
+        ,'media_provider': 'filesystem'
+        ,'media_fs_root': '/srv/www/media'
+        ,'media_fs_base_url_http': 'http://%s/media/' % REDDIT_DOMAIN
+        ,'media_fs_base_url_https': 'https://%s/media/' % REDDIT_DOMAIN
+    }
+    for k in defaults.keys():
+        ini.set('DEFAULT', k, defaults[k])
+
+    try:
+        ini.add_section('server:main')
+    except:
+        pass
+        
+    ini.set('server:main', 'port', '8001')
+
+    with open('%s/juju.update' % REDDIT_INSTALL_PATH, 'w') as cf:
+        ini.write(cf)
     
-    # if [ ! -L run.ini ]; then
-    # sudo -u $REDDIT_USER ln -s development.ini run.ini
-    # fi
-    if os.path.isfile('%s/run.ini' % install_path) is False:
-        cmd = 'sudo -u %s ln -s %s/development.ini %s/run.ini' % (REDDIT_USER, install_path, install_path)
-        log('Symlinking ini - %s' % cmd)
-        subprocess.call(shlex.split(cmd))
+    make_ini()
+    
     
     log('Creating helper scripts')
     create_helper_scripts()
@@ -376,6 +423,20 @@ port = 8001
     
     return True
 
+def make_ini():
+    log("Building reddit ini")
+    subprocess.call(
+"""
+cd %s
+sudo -u %s make ini
+""" % (REDDIT_INSTALL_PATH, REDDIT_USER), shell=True)
+    
+    if os.path.isfile('%s/run.ini' % REDDIT_INSTALL_PATH) is False:
+        cmd = 'sudo -u %s ln -s %s/juju.ini %s/run.ini' % (REDDIT_USER, REDDIT_INSTALL_PATH, REDDIT_INSTALL_PATH)
+        log('Symlinking ini - %s' % cmd)
+        subprocess.call(shlex.split(cmd))
+    return
+    
 def configure_nginx():
     return
     
