@@ -13,7 +13,7 @@ requires:
     interface: cassandra
   cache: 
     interface: memcache
-  ampq:
+  amqp:
     interface: rabbitmq
     
 provides:
