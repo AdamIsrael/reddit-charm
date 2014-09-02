@@ -198,6 +198,15 @@ def pgsql_db_changed():
     os.environ['PGUSER'] = db_user
     os.environ['PGPASSWORD'] = db_pass
     
+    add_to_ini(values={
+        'db_host': db_host
+        ,'db_port': db_port
+        ,'db_name': db_name
+        ,'db_user': db_user
+        ,'db_pass': db_pass
+    })
+    make_ini()
+    
     if not is_pgsql_db_installed():
         if install_pgsql_functions():
             log('reddit database functions installed')
@@ -211,12 +220,11 @@ def pgsql_db_changed():
 
 @hooks.hook('database-relation-joined')
 def cassandra_joined():
-    #hookenv.relation_set(relation_settings={"database": "reddit"})
-    return
+    pass
 
 @hooks.hook('database-relation-broken')
 def cassandra_broken():
-    return
+    pass
     
 @hooks.hook('database-relation-changed')
 def cassandra_changed():
@@ -248,14 +256,9 @@ def cassandra_changed():
         else:
             log("'%s' column already exists" % CASSANDRA_COLUMN)
     
-        # Write out the cassandra part of the ini and rebuild
-        ini = RawConfigParser()
-        ini.optionxform = str  # ensure keys are case-sensitive as expected
-        ini.read('%s/juju.update' % REDDIT_INSTALL_PATH)
-        ini.set('DEFAULT', 'cassandra_seeds', casshost)
-        
-        with open('%s/juju.update' % REDDIT_INSTALL_PATH, 'w') as cf:
-            ini.write(cf)
+        add_to_ini(values={
+            'cassandra_seeds': casshost
+        })
             
         make_ini()
 
@@ -265,44 +268,43 @@ def cassandra_changed():
     return
     
 @hooks.hook('amqp-relation-joined')
-def rabbitmq_server_joined():
+def rabbitmq_server_joined(relation_id=None):
+    hookenv.relation_set(relation_id=relation_id, username='reddit', vhost='/')
+    
     pass
 
 @hooks.hook('amqp-relation-changed')
-def rabbitmq_server_changed():
-    # $ relation-get
-    # hostname: 10.0.3.136
-    # private-address: 10.0.3.136
-
-    # 
-    hookenv.relation_set('username', 'reddit')
-    hookenv.relation_set('vhost', '/')
-    
+def rabbitmq_server_changed(relation_id=None):
     host = hookenv.relation_get('private-address')
     password = hookenv.relation_get('password')
     if host is None or password is None:
         log('rabbitmq not ready')
     else:
         log('rabbitmq is ready!')
-
-    #port = hookenv.relation_get('port')
-    
-    #import client_0_8 as amqp
-
-    #conn = amqp.Connection(host='', userid)
-    # if ! rabbitmqctl list_vhosts | egrep "^/$"
-    # then
-    # rabbitmqctl add_vhost /
-    # fi
-    # if ! rabbitmqctl list_users | egrep "^reddit"
-    # then
-    # rabbitmqctl add_user reddit reddit
-    # fi
-    # rabbitmqctl set_permissions -p / reddit ".*" ".*" ".*"
-    
+        
+        add_to_ini(values={
+            'amqp_host': host
+            ,'amqp_user': 'reddit'
+            ,'amqp_pass': password
+            ,'amqp_virtual_host': '/'            
+        })
+            
+        make_ini()
+        
     pass
 
-@hooks.hook('ampq-relation-broken')
+def add_to_ini (section='DEFAULT', values={}):
+    ini = RawConfigParser()
+    ini.optionxform = str  # ensure keys are case-sensitive as expected
+    ini.read('%s/juju.update' % REDDIT_INSTALL_PATH)
+
+    for k in values.keys():
+        ini.set(section, k, values[k])
+    
+    with open('%s/juju.update' % REDDIT_INSTALL_PATH, 'w') as cf:
+        ini.write(cf)
+
+@hooks.hook('amqp-relation-broken')
 def rabbitmq_server_broken():
     pass
     
@@ -373,6 +375,14 @@ Pin-Priority: 600""")
 
     log("Creating default ini")
 
+    # TODO: Integrate w/add_to_ini
+    # add_to_ini(values={
+    #     'amqp_host': host
+    #     ,'amqp_user': 'reddit'
+    #     ,'amqp_pass': password
+    #     ,'amqp_virtual_host': '/'
+    # })
+
     ini = RawConfigParser()
     ini.optionxform = str  # ensure keys are case-sensitive as expected
     ini.read('%s/juju.update' % REDDIT_INSTALL_PATH)
@@ -423,6 +433,7 @@ Pin-Priority: 600""")
     
     return True
 
+    
 def make_ini():
     log("Building reddit ini")
     subprocess.call(
