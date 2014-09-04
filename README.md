@@ -12,13 +12,16 @@ In order to deploy this charm, you will need a working juju installation. Once b
     juju deploy postgresql
     juju deploy rabbitmq-server
     juju deploy memcached
+    juju deploy gunicorn
+    juju deploy haproxy
     juju deploy reddit
+
     juju add-relation reddit:database cassandra:database
     juju add-relation reddit:db postgresql:db
     juju add-relation reddit rabbitmq-server
-    juju add-relation reddit memcached    
-    juju deploy gunicorn
-    juju add-relation reddit gunicorn    
+    juju add-relation reddit memcached
+    juju add-relation gunicorn reddit 
+    juju add-relation reddit haproxy
     juju expose reddit
 
 After a successful deployment, you can get the reddit unit IP address with:

@@ -11,11 +11,13 @@ requires:
     interface: pgsql
   database:
     interface: cassandra
-  cache: 
+  cache:
     interface: memcache
   amqp:
     interface: rabbitmq
-    
 provides:
   website:
     interface: http
+  wsgi:
+    interface: wsgi
+    scope: container
