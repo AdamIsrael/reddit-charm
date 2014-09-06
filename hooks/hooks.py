@@ -122,13 +122,6 @@ def gunicorn_joined():
 
 @hooks.hook('wsgi-relation-changed')
 def configure_gunicorn():
-    # relation-set
-    # working_dir
-    # wsgi_user = reddit
-    # wsgi_group = reddit
-    # wsgi_worker_connections = 1
-    # listen_ip = 127.0.0.1
-    # port = 5000
     log('Setting gunicorn relation')
     hookenv.relation_set(relation_settings={
         'working_dir': '%s/src/reddit/scripts' % (REDDIT_HOME)
@@ -140,7 +133,7 @@ def configure_gunicorn():
         ,'wsgi_wsgi_file': 'geoip_service'
     })
     
-    #
+    # TODO: Look at what, if any, of this should be exposed via config.yaml
     # for var in config_data:
     #     if var.startswith('wsgi_') or var in ['listen_ip', 'port']:
     #         relation_set(relation_settings={var: config_data[var]})
