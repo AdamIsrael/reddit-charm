@@ -15,7 +15,7 @@
    id="svg6517"
    version="1.1"
    inkscape:version="0.48.5 r10040"
-   sodipodi:docname="icon.svg">
+   sodipodi:docname="reddit.svg">
   <defs
      id="defs6519">
     <linearGradient
@@ -33,11 +33,11 @@
       <stop
          id="stop4178"
          offset="0"
-         style="stop-color:#b8b8b8;stop-opacity:1" />
+         style="stop-color:#5f99cf;stop-opacity:1" />
       <stop
          id="stop4180"
          offset="1"
-         style="stop-color:#c9c9c9;stop-opacity:1" />
+         style="stop-color:#cee3f8;stop-opacity:1" />
     </linearGradient>
     <filter
        style="color-interpolation-filters:sRGB;"
@@ -137,8 +137,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="4.0745362"
-     inkscape:cx="38.148808"
-     inkscape:cy="39.201101"
+     inkscape:cx="18.514671"
+     inkscape:cy="49.018169"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="true"
@@ -146,9 +146,9 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:window-width="751"
-     inkscape:window-height="709"
-     inkscape:window-x="0"
+     inkscape:window-width="1440"
+     inkscape:window-height="852"
+     inkscape:window-x="1"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
      showborder="true"
