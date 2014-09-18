@@ -15,6 +15,8 @@ requires:
     interface: memcache
   amqp:
     interface: rabbitmq
+  nfs:
+    interface: mount    
 provides:
   website:
     interface: http
