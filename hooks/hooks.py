@@ -30,6 +30,10 @@ from charmhelpers.core.hookenv import (
     , unit_get
 )
 
+# from charmhelpers.core.fstab import (
+#     Fstab
+# )
+
 hooks = hookenv.Hooks()
 log = hookenv.log
 
@@ -41,6 +45,7 @@ REDDIT_HOME = '/home/reddit'
 REDDIT_INSTALL_PATH = '%s/src/reddit/r2' % REDDIT_HOME
 
 REDDIT_DOMAIN = unit_get('public-address')
+REDDIT_MEDIA = '/srv'
 CONSUMER_CONFIG_ROOT = '%s/consumer-count.d' % REDDIT_HOME
 CASSANDRA_KEYSPACE = 'reddit'
 CASSANDRA_COLUMN = 'permacache'
@@ -116,6 +121,65 @@ PIP_MODULES = [
     , 'l2cs'
 ]
 
+
+def nfs_is_mounted(mountpoint):
+    # if Fstab.get_entry_by_attr('mountpoint', mountpoint):
+    #     return True
+
+    mounts = host.mounts()
+    for local, remote in mounts:
+        if remote == mountpoint:
+            return True
+    return False
+    
+@hooks.hook('nfs-relation-changed')
+def nfs_changed():
+    # # relation-get
+    # fstype: nfs
+    # mountpoint: /srv/data/reddit
+    # options: rsize=8192,wsize=8192
+    # private-address: 10.0.3.172
+
+    # Install NFS dependencies
+    apt_install(packages=['rpcbind', 'nfs-common'], fatal=True)
+    
+    fstype = hookenv.relation_get('fstype')
+    mountpoint = hookenv.relation_get('mountpoint')
+    options = hookenv.relation_get('options')
+    privaddr = hookenv.relation_get('private-address')
+
+    if options is None or fstype is None:
+        return
+        
+    if nfs_is_mounted(mountpoint):
+        log('NFS mountpoint %s is already mounted' % mountpoint)
+        return
+
+    # Create the local mountpoint
+    if not os.path.exists(REDDIT_MEDIA):
+        host.mkdir(REDDIT_MEDIA, 0222)
+        host.chownr(REDDIT_MEDIA, 'reddit', 'reddit')
+
+    # Setup the NFS mount
+    log("Mounting NFS at %s" % mountpoint)
+    host.mount('%s:%s' % (privaddr, mountpoint), REDDIT_MEDIA, options=options, persist=True, filesystem=fstype)
+    
+    # Make sure Reddit knows where to look for thumbnails, subreddit stylesheets/images, and icons.
+    add_to_ini(values={
+        'media_provider': 'filesystem'
+        ,'media_fs_root': REDDIT_MEDIA
+        ,'media_fs_base_url_http': ''
+        ,'media_fs_base_url_https': ''
+        ,'media_domain': 'localhost'
+    })
+    make_ini()
+    
+    pass
+    
+@hooks.hook('nfs-relation-broken')
+def nfs_broken():
+    pass
+    
 @hooks.hook('wsgi-relation-joined')
 def gunicorn_joined():
     pass
