@@ -6,6 +6,7 @@ import pwd
 import sys
 import shlex, subprocess
 import shutil, glob
+import yaml
 from ConfigParser import RawConfigParser
 
 sys.path.insert(0, os.path.join(os.environ['CHARM_DIR'], 'lib'))
@@ -178,6 +179,8 @@ def nfs_changed():
     
 @hooks.hook('nfs-relation-broken')
 def nfs_broken():
+    
+    # TODO: unmount NFS
     pass
     
 @hooks.hook('wsgi-relation-joined')
@@ -209,29 +212,113 @@ def configure_gunicorn():
     pass
 
 @hooks.hook('website-relation-joined')
-def haproxy_joined():
-    # hookenv.relation_set('hostname', '')
-    # hookenv.relation.set('port', 80)
+def haproxy_joined(relation_id=None):
+
+    # log('Setting unit relations')
+    # hookenv.relation_set(
+    #     hostname = unit_get('private-address')
+    #     , port = 8001
+    #     #, service_name = 'reddit_www'
+    # )
+    #
+    # services_yaml = [
+    #     {
+    #     'hostname': unit_get('private-address')
+    #     ,'port': 80
+    #     ,'service_name': 'reddit'
+    #     }
+    # ]
+    #
+    # hookenv.relation_set(relation_id, services=services_yaml)
+    #
     pass
 
 @hooks.hook('website-relation-changed')
-def haproxy_changed():
+def haproxy_changed(relation_id=None):
     # relation-get
     # private-address: 10.0.3.144
 
-    # host = hookenv.relation_get('host')
-    # port = hookenv.relation_get('port')
+    # if relation_id:
+    #     log("Relation ID: %s" % relation_id)
+
+    # relation-set "hostname=$(unit-get private-address)"
+    # relation-set "port=80"
     #
+    # # Set an optional service name, allowing more config-based
+    # # customization
+    # relation-set "service_name=my_web_app"
+    
+    # All exposed services, i.e., reddit, sutro, media
+#     host = hookenv.unit_get('private-address')
+#     y = """
+# [{
+#     service_name: reddit_www,
+#     service_options: [mode http, balance leastconn],
+#     servers: [[www001, %s, 8001, option httpchk GET / HTTP/1.0]]
+# }]
+# """ % host
+#
+#     log(y)
+    
+    # TODO: either randomize or get the hostname to set in the server stanza
     # hookenv.relation_set(
-    #     "services",
-    #     {
-    #         service_name: 'reddit'
-    #         , service_options: []
-    #         , servers: []
-    #     }
-    # )
+    #     hostname = unit_get('private-address')
+    #     ,port = 80
+    #     ,services=y
+    #)
+    
+    hookenv.relation_set(
+        services=_get_haproxy_config()
+    )
     pass
 
+def _get_haproxy_config():
+    host = hookenv.unit_get('private-address')
+    
+    # - service_name: haproxy_service
+    #   service_host: "0.0.0.0"
+    #   service_port: 80
+    #   service_options: [balance leastconn, cookie SRVNAME insert]
+    #   server_options: maxconn 100 cookie S{i} check
+    
+    # Kind of works, if you remove the haproxy config for service
+    reddit_service = [
+        {
+            'service_name': 'reddit'
+            , 'service_host': '0.0.0.0'
+            , 'service_port': 80
+            , 'server_options': [
+                'maxconn 4'
+                , 'option httpclose'
+                , 'option forwardfor except 127.0.0.1'
+            ]
+            , 'service_options': [
+                'mode http'
+                , 'timeout connect 4000'
+                , 'timeout server 30000'
+                , 'timeout queue 60000'
+                , 'balance roundrobin'
+            ]
+            , 'servers': [
+                ('asdfasfd', host, '8001', ['maxconn 1'])
+            ]
+        }
+    ]
+
+    # nginx_config = [
+    #     {
+    #         'service_name': 'media'
+    #         , 'service_options': ['mode http', 'balance leastconn', 'timeout connect 4000', 'timeout server 30000', 'timeout queue 60000', 'balance roundrobin']
+    #         , 'servers': [
+    #                 ['nginx', host, '9000', 'maxconn 20']
+    #         ]
+    #     }
+    # ]
+    # y = yaml.safe_dump(reddit_service)
+    # log(y)
+    #log(yaml.safe_dump(reddit_service))
+    return yaml.safe_dump(reddit_service)
+    
 @hooks.hook('cache-relation-joined')
 def memcached_joined():
     # relation-get
@@ -477,6 +564,11 @@ Pin-Priority: 600""")
     install_reddit_repo('liveupdate')
     install_reddit_repo('meatspace')
 
+    log("chowning %s" % REDDIT_HOME)
+    cmd = 'chown -R %s:%s %s' % (REDDIT_USER, REDDIT_GROUP, REDDIT_HOME)
+    log(cmd)
+    subprocess.call(shlex.split(cmd))
+
     # Generate binary translation files
     log("Generating binary translation files")
     subprocess.call("""
@@ -493,6 +585,7 @@ Pin-Priority: 600""")
 
     log("Creating default ini")
 
+    # TODO: Make sure juju.update is owned by the reddit user
     # TODO: Integrate w/add_to_ini
     # add_to_ini(values={
     #     'amqp_host': host
@@ -539,10 +632,10 @@ Pin-Priority: 600""")
     create_helper_scripts()
 
 
-    log("chowning %s" % REDDIT_HOME)
-    cmd = 'chown -R %s:%s %s' % (REDDIT_USER, REDDIT_GROUP, REDDIT_HOME)
-    log(cmd)
-    subprocess.call(shlex.split(cmd))
+    # log("chowning %s" % REDDIT_HOME)
+    # cmd = 'chown -R %s:%s %s' % (REDDIT_USER, REDDIT_GROUP, REDDIT_HOME)
+    # log(cmd)
+    # subprocess.call(shlex.split(cmd))
 
     log('Configuring job environment')
     configure_job_environment()
@@ -637,6 +730,20 @@ def config_changed():
             log("config['{}'] changed from {} to {}".format(
                 key, config.previous(key), config[key]))
 
+    if config.changed('development-mode'):
+        if config['development-mode']:
+            # Development mode: Engage!
+            log('Turning on development mode')
+            cmd = "reddit-run %s/r2/models/populatedb.py -c 'populate()'" % REDDIT_INSTALL_PATH
+            log(cmd)
+            subprocess.call(cmd)
+            # cd $REDDIT_HOME/src/reddit/r2
+            # reddit-run r2/models/populatedb.py -c 'populate()'
+            
+        else:
+            log('Turning off development mode')
+    else:
+        log('Development mode not changed')
     config.save()
     start()
 
