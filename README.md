@@ -6,7 +6,7 @@ This reddit charm provides the means to get a working, scalable version of [redd
 
 In order to deploy this charm, you will need a working juju installation. Once bootstrapped, issue these commands:
 
-    juju deploy cs:precise/cassandra    
+    juju deploy cs:precise/cassandra
     juju deploy postgresql
     juju deploy rabbitmq-server
     juju deploy memcached
@@ -20,20 +20,26 @@ In order to deploy this charm, you will need a working juju installation. Once b
     juju add-relation reddit:db postgresql:db
     juju add-relation reddit rabbitmq-server
     juju add-relation reddit memcached
-    juju add-relation reddit nfs    
-    juju add-relation reddit gunicorn    
+    juju add-relation reddit nfs
+    juju add-relation reddit gunicorn
+
+    # Reddit and haproxy, oh my.
+    Need to make the charm work simply by IP address of the haproxy node.
+    Need to test with multiple haproxy services
+    Need to talk about setting the domain, i.e., reddit.local, reddit-is-cool.com, etc.
+
 
     juju set haproxy services=" "
     juju add-relation reddit:website haproxy:reverseproxy
-    
-    
+
+
     juju expose reddit
 
 After a successful deployment, you can get the reddit unit IP address with:
 
     juju status reddit
 
-and then browse to http://ip-address/path to configure the service. 
+and then browse to http://ip-address/path to configure the service.
 
 The source files are installed to /home/reddit/src/reddit, in the unit machine's file system.
 
