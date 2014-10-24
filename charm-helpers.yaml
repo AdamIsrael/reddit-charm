@@ -3,3 +3,4 @@ branch: lp:charm-helpers
 include:
   - core
   - fetch
+  - cli
