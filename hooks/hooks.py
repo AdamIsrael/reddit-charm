@@ -37,6 +37,13 @@ from charmhelpers.core.hookenv import (
 #     Fstab
 # )
 
+try:
+    from jinja2 import Template
+except ImportError:
+    apt_install(['python-jinja2'], fatal=True)
+    from jinja2 import Template
+
+
 hooks = hookenv.Hooks()
 log = hookenv.log
 
@@ -112,6 +119,7 @@ PACKAGES = [
     # 'gunicorn',
     # 'sutro',
     'python-pip',
+    'python-jinja2',
 ]
 
 PIP_MODULES = [
@@ -123,9 +131,6 @@ PIP_MODULES = [
 
 
 def nfs_is_mounted(mountpoint):
-    # if Fstab.get_entry_by_attr('mountpoint', mountpoint):
-    #     return True
-
     mounts = host.mounts()
     for local, remote in mounts:
         if remote == mountpoint:
@@ -135,7 +140,7 @@ def nfs_is_mounted(mountpoint):
 
 @hooks.hook('nfs-relation-changed')
 def nfs_changed():
-    # # relation-get
+    # $ relation-get
     # fstype: nfs
     # mountpoint: /srv/data/reddit
     # options: rsize=8192,wsize=8192
@@ -206,27 +211,14 @@ def configure_gunicorn():
         'wsgi_worker_connections': 1,
         'wsgi_wsgi_file': 'geoip_service',
     })
-
-    # TODO: Look at what, if any, of this should be exposed via config.yaml
-    # for var in config_data:
-    #     if var.startswith('wsgi_') or var in ['listen_ip', 'port']:
-    #         relation_set(relation_settings={var: config_data[var]})
-    #
-    #     relation_set(relation_settings={'python_path': python_path})
-    #
-    # open_port(config_data['port'])
-
     pass
 
 
 @hooks.hook('website-relation-joined')
 def haproxy_joined(relation_id=None):
-
-    # log('Setting unit relations')
     hookenv.relation_set(
         hostname=unit_get('private-address'),
         port=8001,
-        # service_name='reddit_service'
     )
 
     # HACK: this should be a static domain, like reddit.local,
@@ -247,49 +239,17 @@ def haproxy_changed(relation_id=None):
     # relation-get
     # private-address: 10.0.3.144
 
-    # if relation_id:
-    #     log("Relation ID: %s" % relation_id)
-
-    # relation-set "hostname=$(unit-get private-address)"
-    # relation-set "port=80"
-    #
-    # # Set an optional service name, allowing more config-based
-    # # customization
-    # relation-set "service_name=my_web_app"
-
-    # All exposed services, i.e., reddit, sutro, media
-    #     host = hookenv.unit_get('private-address')
-    #     y = """
-    # [{
-    #     service_name: reddit_www,
-    #     service_options: [mode http, balance leastconn],
-    #     servers: [[www001, %s, 8001, option httpchk GET / HTTP/1.0]]
-    # }]
-    # """ % host
-    #
-    #     log(y)
-
     # TODO: either randomize or get the hostname to set in the server stanza
     hookenv.relation_set(
         hostname=unit_get('private-address'),
         port=8001,
         services=_get_haproxy_config()
     )
-
-    # hookenv.relation_set(
-    #     services=_get_haproxy_config()
-    # )
     pass
 
 
 def _get_haproxy_config():
     host = hookenv.unit_get('private-address')
-
-    # - service_name: haproxy_service
-    #   service_host: "0.0.0.0"
-    #   service_port: 80
-    #   service_options: [balance leastconn, cookie SRVNAME insert]
-    #   server_options: maxconn 100 cookie S{i} check
 
     # acl is-media path_beg /media/,
     # use_backend media_service if is-media,
@@ -534,7 +494,6 @@ def rabbitmq_server_changed(relation_id=None):
         })
 
         make_ini()
-
     pass
 
 
@@ -551,24 +510,17 @@ def install():
     apt_update(fatal=True)
 
     # Add the reddit PPA
-    # TODO: is there a better way to do this via charmhelpers?
-
-    # apt-get update
-    # # add the reddit ppa for some custom packages
-    # apt-get install $APTITUDE_OPTIONS python-software-properties
-    # apt-add-repository -y ppa:reddit/ppa
     add_source('ppa:reddit/ppa')
 
-    f = open('/etc/apt/preferences.d/reddit', 'w')
-    f.write(
-        """
-Package: *
-Pin: release o=LP-PPA-reddit
-Pin-Priority: 600
-        """
-    )
+    # TODO: is there a better way to do this via charmhelpers?
+    template_path = "{0}/templates/etc-apt-preferences.d-reddit.tmpl".format(
+        hookenv.charm_dir())
 
-    f.close()
+    host.write_file(
+        '/etc/apt/preferences.d/reddit',
+        Template(open(template_path).read()).render()
+    )
+    # run(['service', 'rsyslog', 'restart'])
 
     apt_update(fatal=True)
 
@@ -581,12 +533,6 @@ Pin-Priority: 600
 
     git_pull()
 
-    log('Configuring Cassandra')
-
-    log('Configuring PostgreSQL')
-
-    log('Configuring RabbitMQ')
-
     log('Installing Reddit')
 
     # TODO: This needs to be run under Precise
@@ -597,9 +543,7 @@ Pin-Priority: 600
     install_reddit_repo('meatspace')
 
     log("chowning %s" % REDDIT_HOME)
-    cmd = 'chown -R %s:%s %s' % (REDDIT_USER, REDDIT_GROUP, REDDIT_HOME)
-    log(cmd)
-    subprocess.call(shlex.split(cmd))
+    host.chownr(REDDIT_HOME, REDDIT_USER, REDDIT_GROUP)
 
     # Generate binary translation files
     log("Generating binary translation files")
@@ -615,15 +559,6 @@ Pin-Priority: 600
     """ % (REDDIT_HOME, REDDIT_USER), shell=True)
 
     log("Creating default ini")
-
-    # TODO: Make sure juju.update is owned by the reddit user
-    # TODO: Integrate w/add_to_ini
-    # add_to_ini(values={
-    #     'amqp_host': host
-    #     ,'amqp_user': 'reddit'
-    #     ,'amqp_pass': password
-    #     ,'amqp_virtual_host': '/'
-    # })
 
     ini = RawConfigParser()
     ini.optionxform = str  # ensure keys are case-sensitive as expected
@@ -668,6 +603,11 @@ Pin-Priority: 600
 
     log('Configuring job environment')
     configure_job_environment()
+
+    log('Configuring queue processors')
+    configure_queue_processors()
+
+    # TODO: Start reddit
     # Start reddit
     # initctl emit reddit-start
 
@@ -714,18 +654,27 @@ def configure_geoip():
 
 
 def configure_job_environment():
-    if os.path.isfile('/etc/default/reddit') is False:
-        f = open('/etc/default/reddit', 'w')
-        f.write("""
-export REDDIT_ROOT=%(REDDIT_HOME)s/src/reddit/r2
-export REDDIT_INI=%(REDDIT_HOME)s/src/reddit/r2/run.ini
-export REDDIT_USER=%(REDDIT_USER)s
-export REDDIT_GROUP=%(REDDIT_GROUP)s
-export REDDIT_CONSUMER_CONFIG=%(CONSUMER_CONFIG_ROOT)s
-alias wrap-job=%(REDDIT_HOME)s/src/reddit/scripts/wrap-job
-alias manage-consumers=%(REDDIT_HOME)s/src/reddit/scripts/manage-consumers
-        """ % CONFIG)
-        f.close()
+
+    template_path = "{0}/templates/etc-default-reddit.tmpl".format(
+        hookenv.charm_dir())
+
+    host.write_file(
+        '/etc/default/reddit',
+        Template(open(template_path).read()).render(CONFIG)
+    )
+
+#     if os.path.isfile('/etc/default/reddit') is False:
+#         f = open('/etc/default/reddit', 'w')
+#         f.write("""
+# export REDDIT_ROOT=%(REDDIT_HOME)s/src/reddit/r2
+# export REDDIT_INI=%(REDDIT_HOME)s/src/reddit/r2/run.ini
+# export REDDIT_USER=%(REDDIT_USER)s
+# export REDDIT_GROUP=%(REDDIT_GROUP)s
+# export REDDIT_CONSUMER_CONFIG=%(CONSUMER_CONFIG_ROOT)s
+# alias wrap-job=%(REDDIT_HOME)s/src/reddit/scripts/wrap-job
+# alias manage-consumers=%(REDDIT_HOME)s/src/reddit/scripts/manage-consumers
+#         """ % CONFIG)
+#         f.close()
 
     return
 
@@ -750,14 +699,7 @@ def configure_queue_processors():
     set_consumer_count('vote_link_q', 1)
     set_consumer_count('vote_comment_q', 1)
 
-    cmd = 'chown -R %s:%s %s/' % (
-        REDDIT_USER,
-        REDDIT_GROUP,
-        CONSUMER_CONFIG_ROOT,
-    )
-
-    log(cmd)
-    subprocess.call(shlex.split(cmd))
+    host.chownr(CONSUMER_CONFIG_ROOT, REDDIT_USER, REDDIT_GROUP)
 
     return
 
@@ -910,11 +852,10 @@ def pip_install(packages=None, upgrade=False):
         packages = [packages]
 
     for package in packages:
-        if package.startswith('svn+')
-        or package.startswith('git+')
-        or package.startswith('hg+')
-        or package.startswith('bzr+'):
+        if (package.startswith('svn+') or package.startswith('git+')
+           or package.startswith('hg+') or package.startswith('bzr+')):
             cmd_line.append('-e')
+
         cmd_line.append(package)
 
     # cmd_line.append('--use-mirrors')
@@ -981,6 +922,15 @@ def install_pgsql_functions():
 
     # TODO: sanity check the return output
     return True
+
+# It'd be nice to have this exposed in charmhelpers. There's one, but
+# it's part of unison. It should probably go in cli
+def run_as_user(user, cmds):
+
+    # if cmds is list, run in order
+    # check = subprocess.check_output(cmd)
+
+    pass
 
 if __name__ == "__main__":
     # execute a hook based on the name the program is called by
