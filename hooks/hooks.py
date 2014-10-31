@@ -163,8 +163,7 @@ def nfs_changed():
 
     # Create the local mountpoint
     if not os.path.exists(REDDIT_MEDIA):
-        host.mkdir(REDDIT_MEDIA, 0222)
-        host.chownr(REDDIT_MEDIA, 'reddit', 'reddit')
+        host.mkdir(REDDIT_MEDIA, REDDIT_USER, REDDIT_GROUP, 0222)
 
     # Setup the NFS mount
     log("Mounting NFS at %s" % mountpoint)
@@ -504,7 +503,7 @@ def rabbitmq_server_broken():
 
 @hooks.hook('install')
 def install():
-    log('Installing reddit')
+    log('Installing dependencies')
 
     add_source(config('source'), config('key'))
     apt_update(fatal=True)
@@ -529,11 +528,14 @@ def install():
     # Install modules via pip that aren't available via apt-get:
     pip_install(PIP_MODULES)
 
+    log('Creating reddit user/group')
     add_user_group()
+    host.mkdir('%s/src' % REDDIT_HOME, REDDIT_USER, REDDIT_GROUP, 0755)
 
+    log('Pulling git repo')
     git_pull()
 
-    log('Installing Reddit')
+    log('Installing Reddit repo(s)')
 
     # TODO: This needs to be run under Precise
     install_reddit_repo('reddit/r2')
@@ -662,32 +664,18 @@ def configure_job_environment():
         '/etc/default/reddit',
         Template(open(template_path).read()).render(CONFIG)
     )
-
-#     if os.path.isfile('/etc/default/reddit') is False:
-#         f = open('/etc/default/reddit', 'w')
-#         f.write("""
-# export REDDIT_ROOT=%(REDDIT_HOME)s/src/reddit/r2
-# export REDDIT_INI=%(REDDIT_HOME)s/src/reddit/r2/run.ini
-# export REDDIT_USER=%(REDDIT_USER)s
-# export REDDIT_GROUP=%(REDDIT_GROUP)s
-# export REDDIT_CONSUMER_CONFIG=%(CONSUMER_CONFIG_ROOT)s
-# alias wrap-job=%(REDDIT_HOME)s/src/reddit/scripts/wrap-job
-# alias manage-consumers=%(REDDIT_HOME)s/src/reddit/scripts/manage-consumers
-#         """ % CONFIG)
-#         f.close()
-
     return
 
 
 def configure_queue_processors():
     if os.path.isdir(CONSUMER_CONFIG_ROOT) is False:
-        host.mkdir(CONSUMER_CONFIG_ROOT)
+        host.mkdir(CONSUMER_CONFIG_ROOT, REDDIT_USER, REDDIT_GROUP, 0755)
 
     def set_consumer_count(queue, count):
         queueFile = '%s/%s' % (CONSUMER_CONFIG_ROOT, queue)
         if os.path.isfile(queueFile) is False:
             f = open(queueFile, 'w')
-            f.write(count)
+            f.write('%s' % count)
             f.close()
 
     set_consumer_count('log_q', 0)
@@ -768,6 +756,15 @@ def add_to_ini(section='DEFAULT', values={}):
 
 
 def install_reddit_repo(repo):
+    log('Running setup.py in %s/src/%s' % (REDDIT_HOME, repo))
+    # cwd = '%s/src/%s' % (REDDIT_HOME, repo)
+    # return run_as_user(
+    #     REDDIT_USER,
+    #     cwd,
+    #     'cd %s; python setup.py develop --no-deps' % cwd,
+    #     shell=True
+    # )
+
     subprocess.call(
         """
 cd %s/src/%s
@@ -791,20 +788,22 @@ def clone_reddit_repo(target, repo):
 
     if os.path.isdir(destination) is False:
         # mkdir
-        host.mkdir(destination)
+        host.mkdir(destination, REDDIT_USER, REDDIT_GROUP, 0755)
 
-        cmd = ['git', 'clone', repository_url, destination]
-        print cmd
-        subprocess.call(cmd)
+        # TODO: Need to check the status of git clone and make sure
+        # TODO: it didn't fail (HTTP timeout/error)
+        run_as_user(
+            REDDIT_USER,
+            REDDIT_HOME,
+            ['git', 'clone', repository_url, destination]
+        )
 
-        # if [ -d $destination/upstart ]; then
-        #     cp $destination/upstart/* /etc/init/
-        # fi
+        # cmd = ['git', 'clone', repository_url, destination]
+        # print cmd
+        # subprocess.call(cmd)
 
         if os.path.isdir('%s/upstart' % destination):
             log('Copying upstart script(s)')
-            # /home/reddit/src/reddit/upstart
-            # /home/reddit/src/reddit/upstart/*
             for file in glob.glob('%s/upstart/*' % destination):
                 shutil.copy(file, '/etc/init/')
         # cmd = ['chown', '-R', '%s:%s' %
@@ -813,6 +812,15 @@ def clone_reddit_repo(target, repo):
         # subprocess.call(cmd)
 
     else:
+        log("Updating reddit repo")
+
+        # Get revno
+        run_as_user(
+            REDDIT_USER,
+            destination,
+            ['git', 'pull']
+        )
+
         # chdir
         # git pull
         # cmd = ['sudo', '-u %s' % REDDIT_USER,
@@ -839,6 +847,7 @@ def git_pull():
 def add_user_group():
     host.adduser(REDDIT_USER)
     host.add_user_to_group(REDDIT_USER, REDDIT_GROUP)
+    host.chownr(REDDIT_HOME, REDDIT_USER, REDDIT_GROUP)
 
 
 def pip_install(packages=None, upgrade=False):
@@ -864,22 +873,23 @@ def pip_install(packages=None, upgrade=False):
 
 def create_helper_scripts():
 
-    f = open('/usr/local/bin/reddit-run', 'w')
-    f.write(
-        """
-#!/bin/bash
-exec paster --plugin=r2 run %s/src/reddit/r2/run.ini "\$@"
-""" % REDDIT_HOME)
-    f.close()
-    os.chmod('/usr/local/bin/reddit-run', 0755)
+    template_path = "{0}/templates/reddit-run.tmpl".format(
+        hookenv.charm_dir())
 
-    f = open('/usr/local/bin/reddit-shell', 'w')
-    f.write(
-        """
-#!/bin/bash
-exec paster --plugin=r2 shell %s/src/reddit/r2/run.ini
-""" % REDDIT_HOME)
-    f.close()
+    host.write_file(
+        '/usr/local/bin/reddit-run',
+        Template(open(template_path).read()).render(CONFIG)
+    )
+
+    template_path = "{0}/templates/reddit-shell.tmpl".format(
+        hookenv.charm_dir())
+
+    host.write_file(
+        '/usr/local/bin/reddit-shell',
+        Template(open(template_path).read()).render(CONFIG)
+    )
+
+    os.chmod('/usr/local/bin/reddit-run', 0755)
     os.chmod('/usr/local/bin/reddit-shell', 0755)
 
     return
@@ -914,23 +924,63 @@ def is_pgsql_db_installed():
 def install_pgsql_functions():
     # Install the base database
     log('installing reddit functions')
+
+    return run_as_user(
+        REDDIT_USER,
+        REDDIT_HOME,
+        'psql -f %s/src/reddit/sql/functions.sql' % REDDIT_HOME
+    )
+
     # Install reddit's pgsql functions
     # NOTE: These are create or replace, so it
     # should be run every time a git pull happens
-    cmd = ['psql', '-f', '%s//src/reddit/sql/functions.sql' % REDDIT_HOME]
-    check = subprocess.check_output(cmd)
+    # cmd = ['psql', '-f', '%s//src/reddit/sql/functions.sql' % REDDIT_HOME]
+    # check = subprocess.check_output(cmd)
 
     # TODO: sanity check the return output
-    return True
+    # return True
+
 
 # It'd be nice to have this exposed in charmhelpers. There's one, but
 # it's part of unison. It should probably go in cli
-def run_as_user(user, cmds):
-
-    # if cmds is list, run in order
+def run_as_user(user, cwd, cmd, shell=False):
     # check = subprocess.check_output(cmd)
+    pw_record = pwd.getpwnam(user)
+    uid = pw_record.pw_uid
+    gid = pw_record.pw_gid
 
-    pass
+    env = os.environ.copy()
+    env['HOME'] = pw_record.pw_dir
+    env['USER'] = env['LOGNAME'] = user
+    # env['PWD'] = cwd
+
+    # cmd = 'cd %s; %s' % (cwd, cmd)
+    log("Running '%s' with PWD: %s" % (cmd, cwd))
+
+    # os.environ['PWD'] = cwd
+    process = subprocess.Popen(
+        cmd,
+        preexec_fn=demote(uid, gid),
+        cwd=cwd,
+        env=env,
+        shell=shell,
+        # stdout=subprocess.PIPE,
+    )
+    (output, err) = process.communicate()
+    log("command output: %s" % output)
+    result = process.wait()
+    if(result == 0):
+        return True
+    else:
+        return False
+
+
+def demote(uid, gid):
+    def result():
+        os.setgid(gid)
+        os.setuid(uid)
+    return result
+
 
 if __name__ == "__main__":
     # execute a hook based on the name the program is called by
