@@ -6,7 +6,7 @@ This reddit charm provides the means to get a working, scalable version of [redd
 
 In order to deploy this charm, you will need a working juju installation. Once bootstrapped, issue these commands:
 
-    juju deploy cs:precise/cassandra
+    juju deploy -n 2 cs:precise/cassandra
     juju deploy postgresql
     juju deploy rabbitmq-server
     juju deploy memcached
@@ -23,29 +23,41 @@ In order to deploy this charm, you will need a working juju installation. Once b
     juju add-relation reddit nfs
     juju add-relation reddit gunicorn
 
-    # Reddit and haproxy, oh my.
-    Need to make the charm work simply by IP address of the haproxy node.
-    Need to test with multiple haproxy services
-    Need to talk about setting the domain, i.e., reddit.local, reddit-is-cool.com, etc.
-
-
-
-    juju set haproxy services=" "
-    juju add-relation reddit:website haproxy:reverseproxy
-
-
     juju expose reddit
 
 After a successful deployment, you can get the reddit unit IP address with:
 
     juju status reddit
 
-and then browse to http://ip-address/path to configure the service.
+and then browse to http://ip-address:8001/ to view the site.
 
 The source files are installed to /home/reddit/src/reddit, in the unit machine's file system.
 
-Admin interface
-How to add a reddit
+# Sample Data
+
+To add sample data, run the following commands:
+
+    juju ssh reddit/0
+    reddit-shell
+    >>> from r2.models import populatedb
+    >>> populatedb.populate()
+    ^D
+    service start reddit-job-update_reddits
+
+This will take a little while to run, and will spew a lot of trace to the control
+
+# TODO
+
+Reddit and haproxy, oh my. This is a work-in-progress. Use port 8001 and the reddit unit IP for now.
+
+    juju set haproxy services=" "
+    juju add-relation reddit:website haproxy:reverseproxy
+
+* Need to make the charm work simply by IP address of the haproxy node.
+* Need to test with multiple haproxy services
+* Need to talk about setting the domain, i.e., reddit.local, reddit-is-cool.com, etc.
+* Admin interface
+* How to add a reddit
 
 # Configuration
 
