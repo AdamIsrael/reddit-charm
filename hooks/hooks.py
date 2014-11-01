@@ -632,6 +632,8 @@ sudo -u %s make ini
         )
         log('Symlinking ini - %s' % cmd)
         subprocess.call(shlex.split(cmd))
+    # Restart reddit
+    host.service_restart('reddit-paster')
     return
 
 
@@ -757,6 +759,8 @@ def add_to_ini(section='DEFAULT', values={}):
 
 def install_reddit_repo(repo):
     log('Running setup.py in %s/src/%s' % (REDDIT_HOME, repo))
+
+    # TODO: Get this to work with run_as_user
     # cwd = '%s/src/%s' % (REDDIT_HOME, repo)
     # return run_as_user(
     #     REDDIT_USER,
@@ -925,17 +929,18 @@ def install_pgsql_functions():
     # Install the base database
     log('installing reddit functions')
 
-    return run_as_user(
-        REDDIT_USER,
-        REDDIT_HOME,
-        'psql -f %s/src/reddit/sql/functions.sql' % REDDIT_HOME
-    )
+    # TODO: Fix this. Currently throws a file not found
+    # return run_as_user(
+    #     REDDIT_USER,
+    #     REDDIT_HOME,
+    #     'psql -f %s/src/reddit/sql/functions.sql' % REDDIT_HOME
+    # )
 
     # Install reddit's pgsql functions
     # NOTE: These are create or replace, so it
     # should be run every time a git pull happens
-    # cmd = ['psql', '-f', '%s//src/reddit/sql/functions.sql' % REDDIT_HOME]
-    # check = subprocess.check_output(cmd)
+    cmd = ['psql', '-f', '%s//src/reddit/sql/functions.sql' % REDDIT_HOME]
+    subprocess.check_output(cmd)
 
     # TODO: sanity check the return output
     # return True
@@ -980,6 +985,13 @@ def demote(uid, gid):
         os.setgid(gid)
         os.setuid(uid)
     return result
+
+
+@host.restart_on_change({
+    '/etc/': ['adsf']
+})
+def ini_changed():
+    pass
 
 
 if __name__ == "__main__":
