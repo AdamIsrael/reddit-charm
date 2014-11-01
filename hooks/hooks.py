@@ -589,6 +589,7 @@ def install():
         pass
 
     ini.set('server:main', 'port', '8001')
+    open_port(8001)
 
     with open('%s/juju.update' % REDDIT_INSTALL_PATH, 'w') as cf:
         ini.write(cf)
