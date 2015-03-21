@@ -6,6 +6,9 @@ This reddit charm provides the means to get a working, scalable version of [redd
 
 In order to deploy this charm, you will need a working juju installation. Once bootstrapped, issue these commands:
 
+
+## Development
+
     juju deploy -n 2 cs:precise/cassandra
     juju deploy postgresql
     juju deploy rabbitmq-server
@@ -15,7 +18,23 @@ In order to deploy this charm, you will need a working juju installation. Once b
     juju deploy cs:precise/nfs
     juju deploy reddit
 
+## Production
+
+
     # Enable single machine mode for cassandra, if not running a cluster
+    juju deploy -n 2 cs:precise/cassandra
+
+    juju deploy postgresql
+    juju deploy rabbitmq-server
+    juju deploy memcached
+    juju deploy cs:precise/gunicorn
+    juju deploy cs:precise/haproxy
+    juju deploy cs:precise/nfs
+    juju deploy reddit
+
+
+## Relations
+
     juju add-relation reddit:database cassandra:database
     juju add-relation reddit:db postgresql:db
     juju add-relation reddit rabbitmq-server

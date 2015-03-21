@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import shutil
 import glob
-import yaml
+# import yaml
 from ConfigParser import RawConfigParser
 
 sys.path.insert(0, os.path.join(os.environ['CHARM_DIR'], 'lib'))
@@ -27,9 +27,9 @@ from charmhelpers.fetch import (
 from charmhelpers.core.hookenv import (
     config,
     open_port,
-    relation_set,
-    relation_get,
-    relation_ids,
+    # relation_set,
+    # relation_get,
+    # relation_ids,
     unit_get,
 )
 
@@ -113,7 +113,7 @@ PACKAGES = [
     'postgresql-client',
     # 'rabbitmq-server',
     # 'cassandra',
-    # 'haproxy',
+    'haproxy',
     # 'nginx',
     # 'stunnel',
     # 'gunicorn',
@@ -213,11 +213,21 @@ def configure_gunicorn():
     pass
 
 
+#####################################################################
+# I suggest a new strategry, R2. Let the Wookie win.                #
+# Ideally, I'd use the haproxy relation to handle all of the reddit #
+# configuration, but the current haproxy charm doesn't support many #
+# non-standard features, and no amount of hacking the service yaml  #
+# worked reliably. For now, install haproxy locally for the reddit  #
+# config, and use the relation w/haproxy as a load balancer only.   #
+#####################################################################
+
+
 @hooks.hook('website-relation-joined')
 def haproxy_joined(relation_id=None):
     hookenv.relation_set(
         hostname=unit_get('private-address'),
-        port=8001,
+        # port=8001,
     )
 
     # HACK: this should be a static domain, like reddit.local,
@@ -225,12 +235,10 @@ def haproxy_joined(relation_id=None):
     # HACK: usage of this outside of a test environment.
 
     # Update the ini domain= w/private-address
-    add_to_ini(values={
-        'domain': unit_get('private-address')
-    })
-    make_ini()
-
-    pass
+    # add_to_ini(values={
+    #     'domain': unit_get('private-address')
+    # })
+    # make_ini()
 
 
 @hooks.hook('website-relation-changed')
@@ -241,48 +249,47 @@ def haproxy_changed(relation_id=None):
     # TODO: either randomize or get the hostname to set in the server stanza
     hookenv.relation_set(
         hostname=unit_get('private-address'),
-        port=8001,
-        services=_get_haproxy_config()
+        # port=8001,
+        # services=_get_haproxy_config()
     )
-    pass
 
 
-def _get_haproxy_config():
-    host = hookenv.unit_get('private-address')
-
-    # acl is-media path_beg /media/,
-    # use_backend media_service if is-media,
-
-    yy = """
-- {
-    service_name: reddit_service,
-    service_host: "0.0.0.0",
-    service_port: 80,
-    service_options: [
-      mode http,
-      option httpclose,
-      option forwardfor,
-      timeout connect 4000,
-      timeout server 30000,
-      timeout queue 60000,
-      balance roundrobin,
-      timeout client 24h,
-    ],
-    servers: [
-      [my_web_app_1, %s, 8001, maxconn 1],
-    ]
-  }
-- {
-    service_name: media_service,
-    service_host: "0.0.0.0",
-    service_port: 81,
-    service_options: [balance leastconn],
-    servers: [
-      [my_web_app_2, %s, 9000, maxconn 250],
-    ]
-  }
-""" % (host, host)
-    return yy
+# def _get_haproxy_config():
+#     host = hookenv.unit_get('private-address')
+#
+#     # acl is-media path_beg /media/,
+#     # use_backend media_service if is-media,
+#
+#     yy = """
+# - {
+#     service_name: reddit_service,
+#     service_host: "0.0.0.0",
+#     service_port: 80,
+#     service_options: [
+#       mode http,
+#       option httpclose,
+#       option forwardfor,
+#       timeout connect 4000,
+#       timeout server 30000,
+#       timeout queue 60000,
+#       balance roundrobin,
+#       timeout client 24h,
+#     ],
+#     servers: [
+#       [my_web_app_1, %s, 8001, maxconn 1],
+#     ]
+#   }
+# - {
+#     service_name: media_service,
+#     service_host: "0.0.0.0",
+#     service_port: 81,
+#     service_options: [balance leastconn],
+#     servers: [
+#       [my_web_app_2, %s, 9000, maxconn 250],
+#     ]
+#   }
+# """ % (host, host)
+#     return yy
 
 
 @hooks.hook('cache-relation-joined')
@@ -613,6 +620,26 @@ def install():
     # TODO: Start reddit
     # Start reddit
     # initctl emit reddit-start
+    log('Configuring haproxy')
+    template_path = "{0}/templates/etc/haproxy/haproxy.tmpl".format(
+        hookenv.charm_dir())
+
+    host.write_file(
+        '/etc/haproxy/haproxy.cfg',
+        Template(open(template_path).read()).render()
+    )
+
+    template_path = "{0}/templates/etc/default/haproxy.tmpl".format(
+        hookenv.charm_dir())
+
+    host.write_file(
+        '/etc/default/haproxy.',
+        Template(open(template_path).read()).render()
+    )
+
+    host.service_restart('haproxy')
+
+    # sudo service reddit-paster start
 
     return True
 
@@ -732,6 +759,7 @@ reddit-run %s/r2/models/populatedb.py -c 'populate()'
 @hooks.hook('upgrade-charm')
 def upgrade_charm():
     log('Upgrading reddit')
+    cassandra_changed()
 
 
 @hooks.hook('start')
