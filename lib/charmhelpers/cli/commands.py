@@ -14,5 +14,17 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with charm-helpers.  If not, see <http://www.gnu.org/licenses/>.
 
-from .base import *  # NOQA
-from .helpers import *  # NOQA
+"""
+This module loads sub-modules into the python runtime so they can be
+discovered via the inspect module. In order to prevent flake8 from (rightfully)
+telling us these are unused modules, throw a ' # noqa' at the end of each import
+so that the warning is suppressed.
+"""
+
+from . import CommandLine  # noqa
+
+"""
+Import the sub-modules to be included by chlp.
+"""
+import host  # noqa
+import benchmark  # noqa

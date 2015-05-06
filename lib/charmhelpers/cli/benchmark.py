@@ -14,5 +14,15 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with charm-helpers.  If not, see <http://www.gnu.org/licenses/>.
 
-from .base import *  # NOQA
-from .helpers import *  # NOQA
+from . import cmdline
+from charmhelpers.contrib.benchmark import Benchmark
+
+
+@cmdline.subcommand(command_name='benchmark-start')
+def start():
+    Benchmark().start()
+
+
+@cmdline.subcommand(command_name='benchmark-finish')
+def finish():
+    Benchmark().finish()

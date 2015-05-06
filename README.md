@@ -9,7 +9,8 @@ In order to deploy this charm, you will need a working juju installation. Once b
 
 ## Development
 
-    juju deploy -n 2 cs:precise/cassandra
+    juju deploy cs:precise/cassandra
+    juju set cassandra allow-single-node=True
     juju deploy postgresql
     juju deploy rabbitmq-server
     juju deploy memcached
